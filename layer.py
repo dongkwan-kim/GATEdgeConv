@@ -32,8 +32,11 @@ def add_self_loops_v2(edge_index, edge_weight: Optional[torch.Tensor] = None,
 
     if edge_attr is not None:
         assert edge_attr.size(0) == edge_index.size(1)
-        loop_attr = scatter(edge_attr, edge_index[0], dim=0, dim_size=N,
-                            reduce=edge_attr_reduce)
+        if edge_attr_reduce != "fill":
+            loop_attr = scatter(edge_attr, edge_index[0], dim=0, dim_size=N,
+                                reduce=edge_attr_reduce)
+        else:
+            loop_attr = edge_attr.new_full((N, edge_attr.size(1)), fill_value)
         edge_attr = torch.cat([edge_attr, loop_attr], dim=0)
 
     edge_index = torch.cat([edge_index, loop_index], dim=1)
@@ -48,10 +51,13 @@ class GATEdgeConv(GATConv):
                  negative_slope: float = 0.2, dropout: float = 0.0,
                  add_self_loops: bool = True, bias: bool = True,
                  edge_dim: int = None, edge_attr_reduce_for_self_loops: str = "mean",
+                 edge_attr_fill_value: float = 1.,
                  **kwargs):
 
+        assert edge_attr_reduce_for_self_loops in ["mean", "sum", "add", "mul", "min", "max", "fill"]
         self.edge_dim = edge_dim
         self.edge_attr_reduce_for_self_loops = edge_attr_reduce_for_self_loops
+        self.edge_attr_fill_value = edge_attr_fill_value
 
         super().__init__(in_channels, out_channels, heads, concat,
                          negative_slope, dropout, add_self_loops, bias, **kwargs)
@@ -118,6 +124,7 @@ class GATEdgeConv(GATConv):
                 edge_index, _, edge_attr = add_self_loops_v2(
                     edge_index, edge_attr=edge_attr,
                     edge_attr_reduce=self.edge_attr_reduce_for_self_loops,
+                    fill_value=self.edge_attr_fill_value,
                     num_nodes=num_nodes)
             elif isinstance(edge_index, SparseTensor):
                 assert edge_attr is None, \
@@ -166,18 +173,19 @@ class GATEdgeConv(GATConv):
 
 
 if __name__ == '__main__':
+    REDUCE = "mean"
     _x = torch.randn((10, 7)).float()
     _edge_index = torch.arange(10).view(2, 5)
     _edge_attr = torch.randn((5, 17)).float()
 
-    _layer = GATEdgeConv(7, 13, edge_dim=17, heads=3, add_self_loops=True)
+    _layer = GATEdgeConv(7, 13, edge_dim=17, edge_attr_reduce_for_self_loops=REDUCE, heads=3, add_self_loops=True)
     print(_layer(_x, _edge_index, _edge_attr).size())  # torch.Size([10, 39])
 
-    _layer = GATEdgeConv(7, 13, edge_dim=None, heads=3, add_self_loops=True)
+    _layer = GATEdgeConv(7, 13, edge_dim=None, edge_attr_reduce_for_self_loops=REDUCE, heads=3, add_self_loops=True)
     print(_layer(_x, _edge_index).size())  # torch.Size([10, 39])
 
-    _layer = GATEdgeConv(7, 13, edge_dim=17, heads=3, add_self_loops=False)
+    _layer = GATEdgeConv(7, 13, edge_dim=17, edge_attr_reduce_for_self_loops=REDUCE, heads=3, add_self_loops=False)
     print(_layer(_x, _edge_index, _edge_attr).size())  # torch.Size([10, 39])
 
-    _layer = GATEdgeConv(7, 13, edge_dim=None, heads=3, add_self_loops=False)
+    _layer = GATEdgeConv(7, 13, edge_dim=None, edge_attr_reduce_for_self_loops=REDUCE, heads=3, add_self_loops=False)
     print(_layer(_x, _edge_index).size())  # torch.Size([10, 39])
