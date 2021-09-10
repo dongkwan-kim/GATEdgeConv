@@ -1,6 +1,10 @@
 # GATEdgeConv
 The graph attention operator that supports edge attributes
 
+## Notice
+
+- 2021.09.04: The PR for this layer to PyG is now processing [#3078](https://github.com/rusty1s/pytorch_geometric/pull/3078). 
+
 ## Install Dependencies
 
 ````shell
